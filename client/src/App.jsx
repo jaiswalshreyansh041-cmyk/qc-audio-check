@@ -49,6 +49,18 @@ export default function App() {
       const pair = validPairs[i];
       setCurrentFile({ idx: i, name: pair.audioFile.name, total: validPairs.length });
 
+      // Vercel serverless limit is 4.5 MB per request
+      if (pair.audioFile.size > 4 * 1024 * 1024) {
+        accumulated.push({
+          id: pair.id,
+          audioName: pair.audioFile.name,
+          results: null,
+          error: `File is ${(pair.audioFile.size / 1024 / 1024).toFixed(1)} MB — Vercel has a 4.5 MB upload limit. Please compress the audio or use a smaller file.`,
+        });
+        setAllResults([...accumulated]);
+        continue;
+      }
+
       const fd = new FormData();
       fd.append('audioFile', pair.audioFile);
       fd.append('transcriptFile', pair.transcriptFile);
