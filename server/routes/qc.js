@@ -41,6 +41,11 @@ function getAudioMime(filename) {
 // Client calls this to get a signed token for direct-to-Blob upload (bypasses
 // Vercel's 4.5 MB serverless body limit).
 router.post('/upload', async (req, res) => {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return res.status(500).json({
+      error: 'Vercel Blob is not configured. Go to your Vercel project → Storage → Connect a Blob store, then redeploy.',
+    });
+  }
   try {
     const jsonResponse = await handleUpload({
       body: req.body,
