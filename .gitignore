@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+server/node_modules/
+client/node_modules/
+
+# Environment — NEVER commit real keys
+.env
+.env.local
+.env.*.local
+server/.env
+server/.env.local
+
+# Build output
+dist/
+client/dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
