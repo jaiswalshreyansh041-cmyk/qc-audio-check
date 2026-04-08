@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { upload } from '@vercel/blob/client';
 import FileUpload from './components/FileUpload';
 import ModelSelector from './components/ModelSelector';
 import ChecklistTable from './components/ChecklistTable';
@@ -49,29 +50,33 @@ export default function App() {
       const pair = validPairs[i];
       setCurrentFile({ idx: i, name: pair.audioFile.name, total: validPairs.length });
 
-      // Vercel serverless limit is 4.5 MB per request
-      if (pair.audioFile.size > 4 * 1024 * 1024) {
-        accumulated.push({
-          id: pair.id,
-          audioName: pair.audioFile.name,
-          results: null,
-          error: `File is ${(pair.audioFile.size / 1024 / 1024).toFixed(1)} MB — Vercel has a 4.5 MB upload limit. Please compress the audio or use a smaller file.`,
-        });
-        setAllResults([...accumulated]);
-        continue;
-      }
-
-      const fd = new FormData();
-      fd.append('audioFile', pair.audioFile);
-      fd.append('transcriptFile', pair.transcriptFile);
-      fd.append('model', model);
-
       let entry;
       try {
-        const { data } = await axios.post('/api/run-qc', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 360_000,
+        // 1. Upload audio directly to Vercel Blob (no 4.5 MB limit)
+        const blob = await upload(pair.audioFile.name, pair.audioFile, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
         });
+
+        // 2. Read transcript JSON in the browser
+        const transcriptJson = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try { resolve(JSON.parse(e.target.result)); }
+            catch { reject(new Error('Transcript file contains invalid JSON')); }
+          };
+          reader.onerror = () => reject(new Error('Failed to read transcript file'));
+          reader.readAsText(pair.transcriptFile);
+        });
+
+        // 3. Run QC using the blob URL (no file size restriction)
+        const { data } = await axios.post('/api/run-qc-url', {
+          audioUrl: blob.url,
+          audioFilename: pair.audioFile.name,
+          transcriptJson,
+          model,
+        }, { timeout: 360_000 });
+
         entry = { id: pair.id, audioName: pair.audioFile.name, results: data.results, error: null };
       } catch (err) {
         entry = {
