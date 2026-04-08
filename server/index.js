@@ -6,10 +6,13 @@ import qcRouter from './routes/qc.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4000;
 
+// Allow localhost in dev, any origin in production (Vercel)
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: process.env.VERCEL
+    ? true
+    : ['http://localhost:5173', 'http://localhost:3000'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type'],
 }));
@@ -23,16 +26,22 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Redirect root to the React dev server
-app.get('/', (_req, res) => {
-  res.redirect('http://localhost:5173');
-});
+// Local dev: redirect root to Vite dev server
+if (!process.env.VERCEL) {
+  app.get('/', (_req, res) => res.redirect('http://localhost:5173'));
+}
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Audio QC Checker server running on http://localhost:${PORT}`);
-});
+// ── Local dev: start HTTP server ───────────────────────────────────────────
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Audio QC Checker server running on http://localhost:${PORT}`);
+  });
+}
+
+// ── Vercel: export app as serverless handler ───────────────────────────────
+export default app;
