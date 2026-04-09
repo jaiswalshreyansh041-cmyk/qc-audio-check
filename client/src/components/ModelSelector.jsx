@@ -13,7 +13,7 @@ const MODELS = [
   },
   {
     value: 'gemini',
-    label: 'Gemini 1.5 Pro',
+    label: 'Gemini 3.1 Pro Preview',
     provider: 'Google',
     description: 'Analyzes audio + transcript simultaneously',
     limit: '~100 MB inline limit',
