@@ -52,30 +52,43 @@ export default function App() {
 
       let entry;
       try {
-        // 1. Upload audio directly to Vercel Blob (no 4.5 MB limit)
-        const blob = await upload(pair.audioFile.name, pair.audioFile, {
-          access: 'public',
-          handleUploadUrl: '/api/upload',
-        });
+        const DIRECT_LIMIT = 4 * 1024 * 1024; // 4 MB
+        let data;
 
-        // 2. Read transcript JSON in the browser
-        const transcriptJson = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            try { resolve(JSON.parse(e.target.result)); }
-            catch { reject(new Error('Transcript file contains invalid JSON')); }
-          };
-          reader.onerror = () => reject(new Error('Failed to read transcript file'));
-          reader.readAsText(pair.transcriptFile);
-        });
+        if (pair.audioFile.size <= DIRECT_LIMIT) {
+          // Small file — direct multipart upload (works locally without blob token)
+          const fd = new FormData();
+          fd.append('audioFile', pair.audioFile);
+          fd.append('transcriptFile', pair.transcriptFile);
+          fd.append('model', model);
+          ({ data } = await axios.post('/api/run-qc', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 360_000,
+          }));
+        } else {
+          // Large file — upload to Vercel Blob first, then pass URL to server
+          const blob = await upload(pair.audioFile.name, pair.audioFile, {
+            access: 'public',
+            handleUploadUrl: '/api/upload',
+          });
 
-        // 3. Run QC using the blob URL (no file size restriction)
-        const { data } = await axios.post('/api/run-qc-url', {
-          audioUrl: blob.url,
-          audioFilename: pair.audioFile.name,
-          transcriptJson,
-          model,
-        }, { timeout: 360_000 });
+          const transcriptJson = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try { resolve(JSON.parse(e.target.result)); }
+              catch { reject(new Error('Transcript file contains invalid JSON')); }
+            };
+            reader.onerror = () => reject(new Error('Failed to read transcript file'));
+            reader.readAsText(pair.transcriptFile);
+          });
+
+          ({ data } = await axios.post('/api/run-qc-url', {
+            audioUrl: blob.url,
+            audioFilename: pair.audioFile.name,
+            transcriptJson,
+            model,
+          }, { timeout: 360_000 }));
+        }
 
         entry = { id: pair.id, audioName: pair.audioFile.name, results: data.results, error: null };
       } catch (err) {
